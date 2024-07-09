@@ -1,0 +1,5 @@
+self.directory = "/data/cb1/dccollins/Paper77/a3_mach2"
+self.name_syntax = 'outputlog'
+self.outname = "p77_a3"
+self.frames='last'
+self.axis = [0,2]

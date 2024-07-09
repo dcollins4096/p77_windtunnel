@@ -1,0 +1,4 @@
+self.directory = "/data/cb1/dccollins/Paper77/a1_poiseuille"
+self.name_syntax = 'outputlog'
+self.outname = "p77_a1"
+self.frames='last'
