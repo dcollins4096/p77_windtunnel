@@ -3,7 +3,7 @@
 from  dtools.starter1 import *
 
 
-if 0:
+if 1:
     #sin.  works.
     N = 64
     L = 2*np.pi
@@ -16,6 +16,8 @@ if 0:
     #k[N//2]=0
     fhat = np.fft.fft(f)
     fhatx = 1j*k*fhat
+    #dc offset.
+    #fhatx[0]=1*N
     fx = np.fft.ifft(fhatx)
     print('imag',np.abs(fx.imag).sum())
 
@@ -24,10 +26,10 @@ if 0:
     ax.plot(x,fx.real,c='g')
     ax.plot(x[1:-1],fxN,c='r')
 
-    fig.savefig('%s/fft'%plot_dir)
+    fig.savefig('%s/fft_basic_sin'%plot_dir)
 
 if 1:
-    #sin.  works.
+    #square.  fails
     N = 64
     L = 2*np.pi
     dx = L/N
@@ -42,11 +44,27 @@ if 1:
 
 
     fxN = (f[2:]-f[:-2])/(2*dx)
-    k = np.fft.fftfreq(N)*N
+    k = (np.fft.fftfreq(N)*N).astype('int')
     fhat = np.fft.fft(f)
     fhatx = 1j*k*fhat
+    #necessary for making a real transform
+    fhatx[N//2]=0
+
+    #try to beat down the high k noise.
+    fhatx[N//2-1]=0
+    fhatx[-(N//2-1)]=0
+    fhatx[N//2-2]=0
+    fhatx[-(N//2-2)]=0
+    fhatx[N//2-3]=0
+    fhatx[-(N//2-3)]=0
+    fhatx[N//2-4]=0
+    fhatx[-(N//2-4)]=0
     fx = np.fft.ifft(fhatx)
     print('imag',np.abs(fx.imag).sum())
+    #print( fhatx[k]==np.conj(fhatx[-k]))
+    L=np.abs(fhatx[k]-np.conj(fhatx[-k]))
+    V="%0.3f "*len(L)
+    print(V%tuple(L))
 
     fig,ax=plt.subplots(1,1)
     ax.plot(x,f,c='k')
@@ -54,7 +72,7 @@ if 1:
     ax.plot(x,fx.imag,c='b')
     ax.plot(x[1:-1],fxN,c='r')
 
-    fig.savefig('%s/fft'%plot_dir)
+    fig.savefig('%s/fft_basic_square'%plot_dir)
 
 if 0:
     N = 64

@@ -22,7 +22,7 @@ def p3(arr,fname,positive=False):
         norm = mpl.colors.Normalize(vmin = aaa[aaa>1e-7].min(),vmax=np.abs(arr).max())
     else:
         norm=None
-    cmap=copy.copy(mpl.colormaps.get_cmap("jet"))
+    cmap=copy.copy(mpl.cm.get_cmap("jet"))
     cmap.set_under([0.5]*3)
     pp(arr.real,ax[0],fig,norm=norm,cmap=cmap)
     pp(arr.imag,ax[1],fig,norm=norm,cmap=cmap)
@@ -38,13 +38,14 @@ if 1:
 
     xx,yy= np.meshgrid(x,x,indexing='ij')
 
-    kvec = [5,6]
-    #kvec = [0,1]
+    #kvec = [5,6]
+    kvec = [0,1]
 
     f=1#2*np.pi
     proj = np.sin(f*(kvec[0]*xx+kvec[1]*yy))
+    proj += 2
     kvec = [3,1]
-    proj += np.sin(f*(kvec[0]*xx+kvec[1]*yy))
+    #proj += np.sin(f*(kvec[0]*xx+kvec[1]*yy))
 
 if 1:
     proj = np.ones([N,N])
@@ -66,7 +67,7 @@ if 1:
     p3(projhat, 'Phat')
 
 
-def invert(deltax,deltay):
+def invert(deltax,deltay, mean=0):
     dxhat = np.fft.fftn(deltax)
     dyhat = np.fft.fftn(deltay)
     k1 = np.fft.fftfreq(dxhat.shape[0])*N
@@ -76,22 +77,26 @@ def invert(deltax,deltay):
     rhohat = np.zeros_like(dxhat)
     ok = k2>0
     rhohat[ok] = d2xhat[ok]/k2[ok]
+    rhohat[k2==0] = mean
+    print(rhohat[k2==0])
     rho = np.fft.ifftn(rhohat)
     return rho
 
-if 1:
-    #successful inversion.
+if 0:
+    #perfect inversion.
     epsx_hat = 1j*kx*projhat
     epsy_hat = 1j*ky*projhat
     epsx  = np.fft.ifftn(epsx_hat)
     epsy  = np.fft.ifftn(epsy_hat)
-    rho = invert(epsx,epsy)
+    rho = invert(epsx,epsy, mean=proj.mean()*N*N)
     p3(rho,'rho_back')
     stat(rho,'rho')
     stat(proj,'proj')
     stat(rho.real-proj,'zero')
+    rho2=rho
 
 if 1:
+    #harder inversion
     proj_ghost = np.zeros(nar(proj.shape)+2)
     proj_ghost[1:-1,1:-1]=proj
     sl=slice(1,-1)
@@ -104,8 +109,21 @@ if 1:
     dx = L/N
     delta_x = (proj_ghost[2:,sl]-proj_ghost[:-2,sl])/(2*dx)
     delta_y = (proj_ghost[sl,2:]-proj_ghost[sl,:-2])/(2*dx)
-    rho2 = invert(delta_x,delta_y)
+    rho2 = invert(delta_x,delta_y, mean=proj.sum())
     p3(rho2,'invert_harder')
+
+
+
+if 1:
+    fig,axes=plt.subplots(2,2)
+    ax0=axes[0][0];ax1=axes[0][1];ax2=axes[1][0];ax3=axes[1][1]
+    ax0.hist(proj.flatten())
+    ax1.hist(rho2.real.flatten())
+    b = rho2.real.flatten()+0
+    b.sort()
+    cs= b.cumsum()
+    ax2.plot(cs)
+    fig.savefig('%s/hists'%plot_dir)
 
 
 if 1:
@@ -116,13 +134,18 @@ if 1:
     ext(rho2.real)
     norm = mpl.colors.Normalize(vmin=ext.minmax[0],vmax=ext.minmax[1])
     pp(proj,ax0,fig,norm=norm)
+    ax0.set(title='original')
     pp(rho2.real,ax1,fig,norm=norm)
+    ax1.set(title='reconstructed')
     pp(proj-rho2.real,ax2,fig)
+    ax2.set(title='orig-recon')
     pp(rho2.imag,ax3,fig)
+    ax3.set(title='recon imag')
     #pp(delta_x,ax0,fig)
     #pp(epsx.real,ax1,fig)
     fig.tight_layout()
     fig.savefig('%s/winner'%plot_dir)
+
 
 
 
