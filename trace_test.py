@@ -4,15 +4,15 @@ import tracer.trace_pc as t1
 reload(t1)
 plt.close('all')
 
-N=16
+N=10
 dx = 1/N
 n2 = 1.2
-slope=0.6
+slope=0.3
 off = 0.3
 #cube_xyz,cube = t1.get_cube1(N,ampl=.00,val=n2)
 cube_xyz,cube = t1.get_cube2(N,ampl=.00,val=n2, slope=slope,off=off)
 
-xpos = np.arange(dx*0.5,1,dx)
+xpos = np.arange(dx*0.5,1,dx/2)
 ypos = np.zeros_like(xpos)+0.5
 zpos = np.zeros_like(xpos)+0.0
 xyz = np.stack([xpos,ypos,zpos])

@@ -1,5 +1,6 @@
 
 from dtools.starter1 import *
+from scipy.ndimage import gaussian_filter
 
 def get_cube1(N,ampl=0,val=1.05):
     xyz = np.mgrid[0:N,0:N,0:N]/N
@@ -58,7 +59,6 @@ class tracer():
     def march(self):
 
         N = nar(self.cube.shape)
-        print(N)
         dx = 1/N*self.length_units
         dx.shape=dx.size,1
 
@@ -73,6 +73,7 @@ class tracer():
         #shorthand
         dim,dim1,dim2=self.dim,self.dim1,self.dim2
         cube=self.cube
+        #cube = gaussian_filter(cube,1)
 
 
         #stelcils for derivatives
@@ -100,12 +101,30 @@ class tracer():
 
         #take derivatives
         gx = (np.log(cube[tuple(ip1)])-np.log(cube[tuple(im1)]))/dx[dim1]
-        gy = (np.log(cube[tuple(jp1)])-np.log(cube[tuple(jm1)]))/dx[dim1]
+        gy = (np.log(cube[tuple(jp1)])-np.log(cube[tuple(jm1)]))/dx[dim2]
+        #gx = gaussian_filter(gx,1)
+        #gy = gaussian_filter(gy,1)
         dgx_dz = (gx[tuple(kp1)] - gx[tuple(km1)])/dx[dim]
         dgy_dz = (gy[tuple(kp1)] - gy[tuple(km1)])/dx[dim]
         gx = gx[:,:,1:-1]
         gy = gy[:,:,1:-1]
-        from scipy.ndimage import gaussian_filter
+        linear = False
+        nghost=1
+        if linear:
+            nghost=2
+            dgx_dx = (gx[tuple(ip1)]-gx[tuple(im1)])/dx[dim1]
+            dgx_dy = (gx[tuple(jp1)]-gx[tuple(jm1)])/dx[dim2]
+            dgy_dx = (gy[tuple(ip1)]-gy[tuple(im1)])/dx[dim1]
+            dgy_dy = (gy[tuple(jp1)]-gy[tuple(jm1)])/dx[dim2]
+            self.dgx_dx=dgx_dx
+            self.dgx_dy=dgx_dy
+            self.dgy_dx=dgy_dx
+            self.dgy_dy=dgy_dy
+            gx = gx[1:-1,1:-1,1:-1]
+            gy = gy[1:-1,1:-1,1:-1]
+            dgx_dz = dgx_dz[1:-1,1:-1,1:-1]
+            dgy_dz = dgy_dz[1:-1,1:-1,1:-1]
+
         #gx = gaussian_filter(gx,1)
         #gy = gaussian_filter(gy,1)
 
@@ -115,11 +134,13 @@ class tracer():
         self.gx=gx
         self.gy=gy
 
-        zstep_array=np.arange(Nd[0])*dx[dim]
-        print(dx)
+        self.rays[2,:]+=dx[dim]*nghost
+        zstep_array=(np.arange(Nd[0])+nghost)*dx[dim]
         ray_shape = self.rays.shape
         self.saver = np.zeros([ray_shape[dim1],ray_shape[dim2],zstep_array.size+1])-1
         self.saver[:,:,0]=self.rays
+        
+
 
         for nz,zstep in enumerate(zstep_array):
             next_z = zstep+dx[dim]
@@ -127,36 +148,39 @@ class tracer():
             marchers = slice(None)
             any_marching = True
             eject=False
-            while any_marching:
-
                 
-                ijk = (self.rays[:,marchers]//dx-1).astype('int')
-                ijk = np.minimum(ijk,Nd[0]-1)
-                ijk = np.maximum(ijk,0)
-                this_Dx = Dx[tuple(ijk)]
-                this_Dy = Dy[tuple(ijk)]
-                this_gx = gx[tuple(ijk)]
-                this_gy = gy[tuple(ijk)]
-                this_dgx_dz = dgx_dz[tuple(ijk)]
-                this_dgy_dz = dgy_dz[tuple(ijk)]
+            xyz = self.rays[:,marchers]
+            ijk = (xyz//dx-nghost).astype('int')
+            ijk = np.minimum(ijk,Nd[0]-nghost)
+            ijk = np.maximum(ijk,0)
+            this_Dx = Dx[tuple(ijk)]
+            this_Dy = Dy[tuple(ijk)]
+            this_gx = gx[tuple(ijk)]
+            this_gy = gy[tuple(ijk)]
+            this_dgx_dz = dgx_dz[tuple(ijk)]
+            this_dgy_dz = dgy_dz[tuple(ijk)]
 
-                dz = np.ones_like(this_gx)*dx[dim]
+            dz = np.ones_like(this_gx)*dx[dim]
+            if not linear:
                 self.eps[0] += dz*this_gx#+0.5*dz**2*this_dgx_dz
                 self.eps[1] += dz*this_gy#+0.5*dz**2*this_dgy_dz
-                this_shiftx = dz*self.eps[0,:]
-                this_shifty = dz*self.eps[1,:]
+            else:
+                self.eps[0] += dz*this_gx+0.5*dz**2*this_dgx_dz
+                self.eps[1] += dz*this_gy+0.5*dz**2*this_dgy_dz
 
-                shift = np.stack([this_shiftx, this_shifty, dz])
-                self.rays[:,marchers] = self.rays[:,marchers] + shift
-                #marchers = self.rays[dim] < next_z
-                #any_marching = marchers.any()
-                any_marching=False
-                if any_marching and False:
+                ijk_c = (xyz//dx).astype('int')
+                delta = (ijk_c+0.5)*dx - xyz
+                d1 = dz*(delta[0]*dgx_dx[tuple(ijk)]+delta[1]*dgx_dy[tuple(ijk)])
+                d2 = dz*(delta[0]*dgy_dx[tuple(ijk)]+delta[1]*dgy_dy[tuple(ijk)])
+                self.eps[0] += d1
+                self.eps[1] += d2
 
-                    eject=True
-                    print("EJECT")
-                    pdb.set_trace()
-                    break
+
+            this_shiftx = dz*self.eps[0,:]
+            this_shifty = dz*self.eps[1,:]
+
+            shift = np.stack([this_shiftx, this_shifty, dz])
+            self.rays[:,marchers] = self.rays[:,marchers] + shift
 
 
             self.saver[:,:,nz+1]=self.rays
