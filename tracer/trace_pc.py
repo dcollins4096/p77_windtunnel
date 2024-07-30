@@ -1,10 +1,48 @@
 
 from dtools.starter1 import *
 from scipy.ndimage import gaussian_filter
+from tools import *
 
-def get_cube1(N,ampl=0,val=1.05):
+def get_rays(N,dims,length):
+    dx = length/N
+    x = np.arange(0,length,dx)+0.5*dx
+    x, y = np.meshgrid(x,x,indexing='ij')
+    x=x.flatten()
+    y=y.flatten()
+    z = np.zeros_like(x)
+    xyz = np.stack([x,y,z])
+    return xyz
+
+def get_cube_impulse(N,xyz, rho1=1,rho2=1.01):
+    cube = np.zeros([N,N,N])+rho1
+    sl = slice(None)
+    sss = [sl,sl,sl]
+    for dim in range(len(xyz)):
+        if xyz[dim] >= 0:
+            sss[dim] = slice(xyz[dim],xyz[dim]+1)
+    cube[tuple(sss)] = rho2
+    return cube
+
+
+
+def get_cubeslab(N,ampl=0,center=None):
     xyz = np.mgrid[0:N,0:N,0:N]/N
-    c = [0.5]*3
+    if center is None:
+        c = [0.5]*3
+    else:
+        c = [0.25, 0.35, 0.5]
+    print(c)
+    out = np.ones([N]*3)
+    ok = xyz[1]*N==center
+    out[ok]=xyz[0][ok]
+    return xyz,out
+def get_cube1(N,ampl=0,val=1.05,center=None):
+    xyz = np.mgrid[0:N,0:N,0:N]/N
+    if center is None:
+        c = [0.5]*3
+    else:
+        c = [0.25, 0.35, 0.5]
+    print(c)
     r2 = (xyz[0]-c[0])**2+(xyz[1]-c[1])**2+(xyz[2]-c[2])**2
     out = np.ones([N]*3)
     R = 0.25
@@ -26,6 +64,36 @@ def get_cube2(N,ampl=0,val=1.05,slope=0.3,off=0.5):
         out += rando
     return xyz,out
 
+def image_dx(tracer,fname):
+    fig,axes=plt.subplots(1,3, figsize=(12,4))
+    #fig,axes=plt.subplots(2,2)
+    #ax0=axes[0][0];ax1=axes[0][1];ax2=axes[1][0];ax3=axes[1][1]
+    ax0=axes[0];ax1=axes[1];ax2=axes[2]
+    proj = tracer.cube.sum(axis=2)
+    p=ax0.pcolormesh(tracer.xplane, tracer.yplane, proj)
+    fig.colorbar(p,ax=ax0)
+    
+    ax0.set(title='proj')
+    x0,y0,z0=tracer.saver[0,:,0], tracer.saver[1,:,0], tracer.saver[2,:,0]
+    x0.shape = tracer.N[0], tracer.N[1]
+    y0.shape = tracer.N[0], tracer.N[1]
+    Z = tracer.Dx
+    Z.shape = tracer.N[0], tracer.N[1]
+    p=ax1.pcolormesh(x0,y0,Z)
+    fig.colorbar(p,ax=ax1)
+    Z = tracer.Dy
+    Z.shape = tracer.N[0], tracer.N[1]
+    p=ax2.pcolormesh(x0,y0,Z)
+    fig.colorbar(p,ax=ax2)
+
+    fig.tight_layout()
+    fig.savefig(fname)
+
+
+
+
+
+
 class tracer():
     def __init__(self,cube,rays,dim=2,length_units=1):
         self.cube1=cube
@@ -33,6 +101,10 @@ class tracer():
         self.rays=rays
         self.dim = dim
         self.length_units=length_units
+        self.N = cube.shape
+        self.xplane, self.yplane, z = get_rays(self.N[0], 2, length_units)
+        self.xplane.shape = self.N[0],self.N[1]
+        self.yplane.shape = self.N[0],self.N[1]
     def make_constant(self):
         shape = nar(self.cube1.shape)
         shape += 2
@@ -56,9 +128,17 @@ class tracer():
         self.cube[:,-1,:]=self.cube[:,1,:]
         self.cube[:,:,-1]=self.cube[:,:,1]
 
+    def get_dx(self):
+        xf,yf,zf=self.saver[0,:,-1], self.saver[1,:,-1], self.saver[2,:,-1]
+        x0,y0,z0=self.saver[0,:,0], self.saver[1,:,0], self.saver[2,:,0]
+        #xx,yy,zz=self.saver[0,:,:], self.saver[1,:,:],self.saver[2,:,:]
+        self.Dx = xf-x0
+        self.Dy = yf-y0
+
     def march(self):
 
         N = nar(self.cube.shape)
+        self.N = N
         dx = 1/N*self.length_units
         dx.shape=dx.size,1
 
