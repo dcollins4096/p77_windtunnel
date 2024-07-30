@@ -94,6 +94,22 @@ def image_dx(tracer,fname):
 
 
 
+def ddx(array, direction, dx):
+    sl = slice(None)
+    ii = slice(1,-1)
+    ip1 = slice(2,None)
+    im1 = slice(0,-2,None)
+    iii = [ii,ii,ii]
+    left =  [ii,ii,ii]
+    right = [ii,ii,ii]
+    left[direction]=ip1
+    right[direction]=im1
+    out = np.zeros_like(array)
+    out[tuple(iii)] = (array[tuple(left)]-array[tuple(right)])/dx
+    return out
+
+
+
 class tracer():
     def __init__(self,cube,rays,dim=2,length_units=1):
         self.cube1=cube
@@ -138,7 +154,6 @@ class tracer():
     def march(self):
 
         N = nar(self.cube.shape)
-        self.N = N
         dx = 1/N*self.length_units
         dx.shape=dx.size,1
 
@@ -156,40 +171,19 @@ class tracer():
         #cube = gaussian_filter(cube,1)
 
 
-        #stelcils for derivatives
-        im1 = [slice(1,-1),slice(1,-1),slice(1,-1)]
-        ip1 = [slice(1,-1),slice(1,-1),slice(1,-1)]
-        jm1 = [slice(1,-1),slice(1,-1),slice(1,-1)]
-        jp1 = [slice(1,-1),slice(1,-1),slice(1,-1)]
-        km1 = [slice(1,-1),slice(1,-1),slice(1,-1)]
-        kp1 = [slice(1,-1),slice(1,-1),slice(1,-1)]
-
-        im1[dim1] = slice(0,-2)
-        ip1[dim1] = slice(2,None)
-        jm1[dim2] = slice(0,-2)
-        jp1[dim2] = slice(2,None)
-        km1[dim]  = slice(0,-2)
-        kp1[dim]  = slice(2,None)
-        ip1[dim] = slice(None)
-        im1[dim] = slice(None)
-        jp1[dim] = slice(None)
-        jm1[dim] = slice(None)
-        kp1[dim1]= slice(None)
-        km1[dim1]= slice(None)
-        kp1[dim2]= slice(None)
-        km1[dim2]= slice(None)
-
-        #take derivatives
-        gx = (np.log(cube[tuple(ip1)])-np.log(cube[tuple(im1)]))/dx[dim1]
-        gy = (np.log(cube[tuple(jp1)])-np.log(cube[tuple(jm1)]))/dx[dim2]
+        #gx = (np.log(cube[tuple(ip1)])-np.log(cube[tuple(im1)]))/dx[dim1]
+        #gy = (np.log(cube[tuple(jp1)])-np.log(cube[tuple(jm1)]))/dx[dim2]
+        gx = ddx(np.log(cube),0,dx[dim1])
+        gy = ddx(np.log(cube),1,dx[dim2])
         #gx = gaussian_filter(gx,1)
         #gy = gaussian_filter(gy,1)
-        dgx_dz = (gx[tuple(kp1)] - gx[tuple(km1)])/dx[dim]
-        dgy_dz = (gy[tuple(kp1)] - gy[tuple(km1)])/dx[dim]
-        gx = gx[:,:,1:-1]
-        gy = gy[:,:,1:-1]
+        #dgx_dz = (gx[tuple(kp1)] - gx[tuple(km1)])/dx[dim]
+        #dgy_dz = (gy[tuple(kp1)] - gy[tuple(km1)])/dx[dim]
+        #gx = gx[:,:,1:-1]
+        #gy = gy[:,:,1:-1]
+        nghost=0
         linear = False
-        nghost=1
+        #nghost=1
         if linear:
             nghost=2
             dgx_dx = (gx[tuple(ip1)]-gx[tuple(im1)])/dx[dim1]
@@ -237,8 +231,8 @@ class tracer():
             this_Dy = Dy[tuple(ijk)]
             this_gx = gx[tuple(ijk)]
             this_gy = gy[tuple(ijk)]
-            this_dgx_dz = dgx_dz[tuple(ijk)]
-            this_dgy_dz = dgy_dz[tuple(ijk)]
+            #this_dgx_dz = dgx_dz[tuple(ijk)]
+            #this_dgy_dz = dgy_dz[tuple(ijk)]
 
             dz = np.ones_like(this_gx)*dx[dim]
             if not linear:
