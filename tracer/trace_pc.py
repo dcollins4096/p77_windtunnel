@@ -9,7 +9,7 @@ def get_rays(N,dims,length):
     x, y = np.meshgrid(x,x,indexing='ij')
     x=x.flatten()
     y=y.flatten()
-    z = np.zeros_like(x)
+    z = np.zeros_like(x)+dx*1e-3 #tiny offset to prevent zone edge confusion.
     xyz = np.stack([x,y,z])
     return xyz
 
@@ -170,41 +170,11 @@ class tracer():
         cube=self.cube
         #cube = gaussian_filter(cube,1)
 
-
-        #gx = (np.log(cube[tuple(ip1)])-np.log(cube[tuple(im1)]))/dx[dim1]
-        #gy = (np.log(cube[tuple(jp1)])-np.log(cube[tuple(jm1)]))/dx[dim2]
         gx = ddx(np.log(cube),0,dx[dim1])
         gy = ddx(np.log(cube),1,dx[dim2])
-        #gx = gaussian_filter(gx,1)
-        #gy = gaussian_filter(gy,1)
-        #dgx_dz = (gx[tuple(kp1)] - gx[tuple(km1)])/dx[dim]
-        #dgy_dz = (gy[tuple(kp1)] - gy[tuple(km1)])/dx[dim]
-        #gx = gx[:,:,1:-1]
-        #gy = gy[:,:,1:-1]
         nghost=0
-        linear = False
-        #nghost=1
-        if linear:
-            nghost=2
-            dgx_dx = (gx[tuple(ip1)]-gx[tuple(im1)])/dx[dim1]
-            dgx_dy = (gx[tuple(jp1)]-gx[tuple(jm1)])/dx[dim2]
-            dgy_dx = (gy[tuple(ip1)]-gy[tuple(im1)])/dx[dim1]
-            dgy_dy = (gy[tuple(jp1)]-gy[tuple(jm1)])/dx[dim2]
-            self.dgx_dx=dgx_dx
-            self.dgx_dy=dgx_dy
-            self.dgy_dx=dgy_dx
-            self.dgy_dy=dgy_dy
-            gx = gx[1:-1,1:-1,1:-1]
-            gy = gy[1:-1,1:-1,1:-1]
-            dgx_dz = dgx_dz[1:-1,1:-1,1:-1]
-            dgy_dz = dgy_dz[1:-1,1:-1,1:-1]
-
-        #gx = gaussian_filter(gx,1)
-        #gy = gaussian_filter(gy,1)
 
         Nd = nar(gx.shape)
-        Dx = np.sign(gx)
-        Dy = np.sign(gy)
         self.gx=gx
         self.gy=gy
 
@@ -213,6 +183,7 @@ class tracer():
         ray_shape = self.rays.shape
         self.saver = np.zeros([ray_shape[dim1],ray_shape[dim2],zstep_array.size+1])-1
         self.saver[:,:,0]=self.rays
+
         
 
 
@@ -227,28 +198,13 @@ class tracer():
             ijk = (xyz//dx-nghost).astype('int')
             ijk = np.minimum(ijk,Nd[0]-nghost)
             ijk = np.maximum(ijk,0)
-            this_Dx = Dx[tuple(ijk)]
-            this_Dy = Dy[tuple(ijk)]
             this_gx = gx[tuple(ijk)]
             this_gy = gy[tuple(ijk)]
-            #this_dgx_dz = dgx_dz[tuple(ijk)]
-            #this_dgy_dz = dgy_dz[tuple(ijk)]
 
             dz = np.ones_like(this_gx)*dx[dim]
-            if not linear:
-                self.eps[0] += dz*this_gx#+0.5*dz**2*this_dgx_dz
-                self.eps[1] += dz*this_gy#+0.5*dz**2*this_dgy_dz
-            else:
-                self.eps[0] += dz*this_gx+0.5*dz**2*this_dgx_dz
-                self.eps[1] += dz*this_gy+0.5*dz**2*this_dgy_dz
-
-                ijk_c = (xyz//dx).astype('int')
-                delta = (ijk_c+0.5)*dx - xyz
-                d1 = dz*(delta[0]*dgx_dx[tuple(ijk)]+delta[1]*dgx_dy[tuple(ijk)])
-                d2 = dz*(delta[0]*dgy_dx[tuple(ijk)]+delta[1]*dgy_dy[tuple(ijk)])
-                self.eps[0] += d1
-                self.eps[1] += d2
-
+            self.eps[0] += dz*this_gx#+0.5*dz**2*this_dgx_dz
+            self.eps[1] += dz*this_gy#+0.5*dz**2*this_dgy_dz
+            ok = np.abs(self.eps[1])>0
 
             this_shiftx = dz*self.eps[0,:]
             this_shifty = dz*self.eps[1,:]
