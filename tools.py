@@ -1,5 +1,30 @@
 from dtools.starter1 import *
 
+import dtools.vis.pcolormesh_helper as pch
+
+def ploot2(rho1, rho2, fname):
+
+    fig, axes=plt.subplots(1,3,figsize=(12,3))
+    #ax0=axes[0][0];ax1=axes[0][1];ax2=axes[1][0];ax3=axes[1][1]
+    ax0=axes[0];ax1=axes[1];ax2=axes[2]
+
+    f1 = rho1
+    pl=ax0.imshow( f1.transpose())
+    fig.colorbar(pl,ax=ax0)
+    f2=rho2.real
+    pl=ax1.imshow(f2.transpose())
+    fig.colorbar(pl,ax=ax1)
+
+    pch.simple_phase(f1.flatten(),f2.flatten(),ax=ax2,bins=[10,10])
+    m = f1.min()
+    x = f1.max()
+    ax2.plot([m,x],[m,x])
+    #ax2.set_aspect('equal')
+
+
+    fig.tight_layout()
+    fig.savefig(fname)
+
 def sinner():
     #kvec = [5,6]
     kvec = [0,1]

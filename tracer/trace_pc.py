@@ -23,6 +23,12 @@ def get_cube_impulse(N,xyz, rho1=1,rho2=1.01):
     cube[tuple(sss)] = rho2
     return cube
 
+def get_cubesin(N,k=[3,5],ampl=0,center=None):
+    x,y,z = (np.mgrid[0:N,0:N,0:N]+0.5)/N
+    sin = np.sin(2*np.pi*(k[0]*x+k[1]*y))
+    cube = sin*1e-3+1
+
+    return cube
 
 
 def get_cubeslab(N,ampl=0,center=None):
@@ -64,6 +70,13 @@ def get_cube2(N,ampl=0,val=1.05,slope=0.3,off=0.5):
         out += rando
     return xyz,out
 
+def get_cube_128(density,gladstone):
+    fptr = h5py.File('2_2/DD0026/data0026.cube.h5','r')
+    cube_raw = fptr['Density'][()]
+    fptr.close()
+    cube = cube_raw*density*gladstone+1
+    return cube
+
 def image_dx(tracer,fname):
     fig,axes=plt.subplots(1,3, figsize=(12,4))
     #fig,axes=plt.subplots(2,2)
@@ -92,16 +105,15 @@ def image_dx(tracer,fname):
 
 
 
-
-
 def ddx(array, direction, dx):
     sl = slice(None)
     ii = slice(1,-1)
     ip1 = slice(2,None)
     im1 = slice(0,-2,None)
-    iii = [ii,ii,ii]
-    left =  [ii,ii,ii]
-    right = [ii,ii,ii]
+    rank = len(array.shape)
+    iii =   [ii]*rank
+    left =  [ii]*rank
+    right = [ii]*rank
     left[direction]=ip1
     right[direction]=im1
     out = np.zeros_like(array)
@@ -144,12 +156,37 @@ class tracer():
         self.cube[:,-1,:]=self.cube[:,1,:]
         self.cube[:,:,-1]=self.cube[:,:,1]
 
+    def get_dx_proj(self):
+        N = self.N
+        #z = (np.arange(N[2])+0.5)/N[2]
+        z = (np.arange(N[2]))/N[2]
+        z.shape = 1,1,z.size
+        self.zproj = ((1-z)*np.log(self.cube)).sum(axis=2)
+        dx=4*np.pi/N[0] #domain is 2pi, Npixels, centered stencil
+        self.dpdx = ddx(self.zproj,0,dx)
+        self.dpdy = ddx(self.zproj,1,dx)
+
+    def get_spectral(self):
+        N = self.N[0]
+        k = np.fft.fftfreq(N)*N
+        kx, ky = np.meshgrid(k, k, indexing='ij')
+        k2 = kx**2+ky**2
+
+        self.get_dx_proj()
+        hat = np.fft.fftn(self.zproj)
+        self.spsx = np.fft.ifftn(1j*kx*hat)
+        self.spsy = np.fft.ifftn(1j*ky*hat)
+
     def get_dx(self):
         xf,yf,zf=self.saver[0,:,-1], self.saver[1,:,-1], self.saver[2,:,-1]
         x0,y0,z0=self.saver[0,:,0], self.saver[1,:,0], self.saver[2,:,0]
         #xx,yy,zz=self.saver[0,:,:], self.saver[1,:,:],self.saver[2,:,:]
-        self.Dx = xf-x0
-        self.Dy = yf-y0
+        #This 4pi/N is necessary, but not in the right place.
+        self.Dx = (xf-x0)/(4*np.pi/self.N[0])
+        self.Dy = (yf-y0)/(4*np.pi/self.N[0])
+        shape = self.N[0:2]
+        self.Dx.shape=shape
+        self.Dy.shape=shape
 
     def march(self):
 
@@ -196,7 +233,7 @@ class tracer():
                 
             xyz = self.rays[:,marchers]
             ijk = (xyz//dx-nghost).astype('int')
-            ijk = np.minimum(ijk,Nd[0]-nghost)
+            ijk = np.minimum(ijk,Nd[0]-nghost-1)
             ijk = np.maximum(ijk,0)
             this_gx = gx[tuple(ijk)]
             this_gy = gy[tuple(ijk)]

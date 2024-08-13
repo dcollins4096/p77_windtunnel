@@ -19,7 +19,9 @@ dddx=[]
 aaan=[]
 eeep=[]
 zzzz=[]
-for zzz in [1,2,3,4,5,6,7,8]:
+z0_list=[1,2,3,4,5,6,7,8]
+z0_list=[4]
+for zzz in z0_list:
     N = 10
     rho1=1
     rho2=1.01
@@ -30,7 +32,6 @@ for zzz in [1,2,3,4,5,6,7,8]:
     gladstone_dale = 2.3e-4 #m^3/kg
     cube = t1.get_cube_impulse(N, xyz, rho1=rho1,rho2=rho2)
     rays = t1.get_rays(N, 2, length_units)
-    rays[2,:]+= 1e-3 #don't start at exactly the zone boundary, round off errors are strange)
     tracer = t1.tracer(cube,rays, length_units=length_units)
     tracer.march()
     tracer.get_dx()
@@ -41,10 +42,17 @@ for zzz in [1,2,3,4,5,6,7,8]:
     dddx.append(mmm)
     aaan.append(ann)
     eeep.append(eps)
+
+    tracer.get_dx_proj()
+    t = tracer.dpdx
+    Dx = tracer.Dx
+    print(Dx[Dx>0]/t[t>0])
+
+
     #print('dx/ann dx',stuff.max()/eps)
     #print('dx/eps',stuff.max()/ann)
     #print('ann/eps',ann/eps)
-    t1.image_dx(tracer,fname='%s/dx'%plot_dir)
+    #t1.image_dx(tracer,fname='%s/dx'%plot_dir)
 
 plt.clf()
 plt.plot(zzzz,dddx)

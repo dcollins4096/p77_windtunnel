@@ -2,8 +2,8 @@
 
 from dtools.starter1 import *
 import tracer.trace_pc as t1
-from dtools.math import brunt_tools as bt
-reload(bt)
+#from dtools.math import brunt_tools as bt
+#reload(bt)
 reload(t1)
 plt.close('all')
 
@@ -13,17 +13,21 @@ n2 = 2
 slope=0.6
 off = 0.3
 cube_xyz,cube = t1.get_cube1(N,ampl=.00,val=n2)
-cube = bt.get_cubes2('2_2',26,do_rho_4=True)
+#cube = bt.get_cubes2('2_2',26,do_rho_4=True)
+if 'cube' in dir():
+    fptr = h5py.File('2_2/DD0026/data0026.cube.h5','r')
+    cube = fptr['Density'][()]
+    fptr.close()
 
-cube_xyz*=0.1
 
 length_units = 0.1 #m
 density_units = 1.204 #kg/m^3
 gladstone_dale = 2.3e-4 #m^3/kg
 #gladstone_dale = 2.3e-2 #m^3/kg
+L0 = length_units
+cube_xyz*=length_units
 
-
-if 0:
+if 1:
     pos = np.arange(dx*0.5,1,dx/3)
     #ypos = np.arange(dx*0.5,1,dx)
     #xpos = np.zeros_like(ypos)+n/N
@@ -59,11 +63,13 @@ if 1:
     the_z = tracer.cube.sum(axis=2)
     the_z = tracer.gx.sum(axis=2)
     ax0.pcolormesh(the_x,the_y,the_z)
+    ax0.set(title='dn/dx')
     ax0.set(xlim=[-dx,L0+dx],ylim=[-dx,L0+dx])
 
     import dtools.vis.pcolormesh_helper as pch
     bins = np.linspace(0,length_units,128)
     pch.simple_phase(xf.flatten(),yf.flatten(),bins=[bins,bins],ax=ax1)
+    ax1.set(title='shadowgraph')
     ddx = xf-x0
     ddy = yf-y0
     x0.shape = pos.size,pos.size
@@ -71,11 +77,13 @@ if 1:
     ddx.shape=pos.size,pos.size
     ddy.shape=pos.size,pos.size
     ax2.pcolormesh(x0,y0,ddx)
+    ax2.set(title='dx')
     dflat = tracer.cube.sum(axis=2)
     flat = dflat[2:,:]-dflat[:-2,:]
     the_x = (cube_xyz[0][1:-1,:,:]).sum(axis=2)/N
     the_y = (cube_xyz[1][1:-1,:,:]).sum(axis=2)/N
     ax3.pcolormesh(the_x,the_y,flat)
+    ax3.set(title='dProj/dx')
     #pch.simple_phase((xf-x0).flatten(),(yf-y0).flatten(),bins=[256,256],ax=ax1)
     #ax1.scatter(xf.flatten(),yf.flatten())
     #ax2.scatter((xf-x0).flatten(),(yf-y0).flatten())
