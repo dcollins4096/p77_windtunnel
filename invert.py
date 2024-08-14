@@ -26,9 +26,10 @@ for zzz in [4]:
     length_units = 1.0 #m
     density_units = 1.204 #kg/m^3
     gladstone_dale = 2.3e-4 #m^3/kg
-    #cube = t1.get_cube_impulse(N, xyz, rho1=rho1,rho2=rho2)
-    cube = t1.get_cube_128(density_units, gladstone_dale)
-    #cube = t1.get_cubesin(N)
+    #cube = t1.get_cube_impulse(N, xyz, rho1=rho1,rho2=rho2); setname='impulse'
+    #cube = t1.get_cubesin(N); setname='sin'
+    sim = '1_1'
+    cube = t1.get_cube_128(density_units, gladstone_dale,sim); setname=sim
     rays = t1.get_rays(N, 2, length_units)
     tracer = t1.tracer(cube,rays, length_units=length_units)
     tracer.march()
@@ -39,9 +40,9 @@ for zzz in [4]:
     total=tracer.zproj.sum()
 
     rho_spect = invert( tracer.spsx, tracer.spsy, mean = total)
-    ploot2( tracer.zproj, rho_spect.real,'%s/invert_impulse_test_spectral'%plot_dir)
+    ploot2( tracer.zproj, rho_spect.real,'%s/invert_%s_test_spectral'%(plot_dir,setname))
 
-    ploot2( tracer.spsx.real, tracer.dpdx, '%s/spectral_vs_centered'%plot_dir)
+    ploot2( tracer.spsx.real, tracer.dpdx, '%s/spectral_vs_centered_%s'%(plot_dir,setname))
     if 0:
         ok = np.abs(tracer.dpdx.real) > 0
         vert = tracer.spsx.real[ok]/tracer.dpdx[ok]
@@ -49,7 +50,7 @@ for zzz in [4]:
         plt.hist(vert.flatten())
         plt.savefig('%s/spec_to_real'%plot_dir)
     rho3 = invert( tracer.dpdx, tracer.dpdy, mean = total)
-    ploot2( tracer.zproj, rho3.real,'%s/invert_impulse_test1'%plot_dir)
+    ploot2( tracer.zproj, rho3.real,'%s/invert_pdx_%s'%(plot_dir,setname))
     fig,ax=plt.subplots(1,1)
     import dtools.math.equal_probability_binner as epb
     ok = np.abs(tracer.zproj)>0
@@ -60,17 +61,17 @@ for zzz in [4]:
         yyyy=np.arange(xxxx.size)/xxxx.size
         tax=ax.twinx()
         tax.plot(xxxx,yyyy,c='k')
-    stuff=epb.equal_prob(xxxx,16,ax)
+    #stuff=epb.equal_prob(xxxx,16,ax)
 
-    fig.savefig('%s/recon_over_real'%plot_dir)
+    #fig.savefig('%s/recon_over_real'%plot_dir)
     #print(tracer.Dx[tracer.Dx>0])
     #print(tracer.dpdx[tracer.dpdx>0])
     rho2 = invert( tracer.Dx, tracer.Dy, mean=total)
 
-    ploot2(tracer.dpdx, tracer.Dx, '%s/Dx_vs_dx_impulse'%plot_dir)
-    ploot2(tracer.zproj, rho2, '%s/invert_impulse'%plot_dir)
+    ploot2(tracer.dpdx, tracer.Dx, '%s/Dx_vs_dx_%s'%(plot_dir,setname))
+    ploot2(tracer.zproj, rho2, '%s/invert_%s'%(plot_dir,setname))
     one = (tracer.cube.mean(axis=2)-1)/(2*(1/N))
-    ploot2(one,rho2,'%s/how_far_off'%plot_dir)
+    ploot2(one,rho2,'%s/how_far_off_%s'%(plot_dir,setname))
     fig2,ax47=plt.subplots(1,2)
     xxx = one.flatten()
     yyy = rho2.flatten()

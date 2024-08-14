@@ -69,9 +69,11 @@ def get_cube2(N,ampl=0,val=1.05,slope=0.3,off=0.5):
         rando.shape = out.shape
         out += rando
     return xyz,out
+root='/data/cb1/Projects/P49_EE_BB/Simulations_128_downsample'
+def get_cube_128(density,gladstone,sim='2_2'):
 
-def get_cube_128(density,gladstone):
-    fptr = h5py.File('2_2/DD0026/data0026.cube.h5','r')
+    frame = {'2_2':26,'1_1':30}[sim]
+    fptr = h5py.File('%s/%s/DD%04d/data%04d.cube.h5'%(root,sim,frame,frame),'r')
     cube_raw = fptr['Density'][()]
     fptr.close()
     cube = cube_raw*density*gladstone+1
