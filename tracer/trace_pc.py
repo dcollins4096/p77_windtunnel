@@ -3,106 +3,8 @@ from dtools.starter1 import *
 from scipy.ndimage import gaussian_filter
 from tools import *
 
-def get_rays(N,dims,length):
-    dx = length/N
-    x = np.arange(0,length,dx)+0.5*dx
-    x, y = np.meshgrid(x,x,indexing='ij')
-    x=x.flatten()
-    y=y.flatten()
-    z = np.zeros_like(x)+dx*1e-3 #tiny offset to prevent zone edge confusion.
-    xyz = np.stack([x,y,z])
-    return xyz
-
-def get_cube_impulse(N,xyz, rho1=1,rho2=1.01):
-    cube = np.zeros([N,N,N])+rho1
-    sl = slice(None)
-    sss = [sl,sl,sl]
-    for dim in range(len(xyz)):
-        if xyz[dim] >= 0:
-            sss[dim] = slice(xyz[dim],xyz[dim]+1)
-    cube[tuple(sss)] = rho2
-    return cube
-
-def get_cubesin(N,k=[3,5],ampl=0,center=None):
-    x,y,z = (np.mgrid[0:N,0:N,0:N]+0.5)/N
-    sin = np.sin(2*np.pi*(k[0]*x+k[1]*y))
-    cube = sin*1e-3+1
-
-    return cube
-
-
-def get_cubeslab(N,ampl=0,center=None):
-    xyz = np.mgrid[0:N,0:N,0:N]/N
-    if center is None:
-        c = [0.5]*3
-    else:
-        c = [0.25, 0.35, 0.5]
-    print(c)
-    out = np.ones([N]*3)
-    ok = xyz[1]*N==center
-    out[ok]=xyz[0][ok]
-    return xyz,out
-def get_cube1(N,ampl=0,val=1.05,center=None):
-    xyz = np.mgrid[0:N,0:N,0:N]/N
-    if center is None:
-        c = [0.5]*3
-    else:
-        c = [0.25, 0.35, 0.5]
-    print(c)
-    r2 = (xyz[0]-c[0])**2+(xyz[1]-c[1])**2+(xyz[2]-c[2])**2
-    out = np.ones([N]*3)
-    R = 0.25
-    out[r2<R**2] = val
-    if 1:
-        np.random.seed(8675309)
-        rando = np.random.random(out.size)*2*ampl-ampl
-        rando.shape = out.shape
-        out += rando
-    return xyz,out
-def get_cube2(N,ampl=0,val=1.05,slope=0.3,off=0.5):
-    xyz = (np.mgrid[0:N,0:N,0:N])/N
-    out = np.ones([N]*3)
-    out[xyz[2] > xyz[0]*slope+off] = val
-    if 1:
-        np.random.seed(8675309)
-        rando = np.random.random(out.size)*2*ampl-ampl
-        rando.shape = out.shape
-        out += rando
-    return xyz,out
-root='/data/cb1/Projects/P49_EE_BB/Simulations_128_downsample'
-def get_cube_128(density,gladstone,sim='2_2'):
-
-    frame = {'2_2':26,'1_1':30}[sim]
-    fptr = h5py.File('%s/%s/DD%04d/data%04d.cube.h5'%(root,sim,frame,frame),'r')
-    cube_raw = fptr['Density'][()]
-    fptr.close()
-    cube = cube_raw*density*gladstone+1
-    return cube
-
-def image_dx(tracer,fname):
-    fig,axes=plt.subplots(1,3, figsize=(12,4))
-    #fig,axes=plt.subplots(2,2)
-    #ax0=axes[0][0];ax1=axes[0][1];ax2=axes[1][0];ax3=axes[1][1]
-    ax0=axes[0];ax1=axes[1];ax2=axes[2]
-    proj = tracer.cube.sum(axis=2)
-    p=ax0.pcolormesh(tracer.xplane, tracer.yplane, proj)
-    fig.colorbar(p,ax=ax0)
-    
-    ax0.set(title='proj')
-    x0,y0,z0=tracer.saver[0,:,0], tracer.saver[1,:,0], tracer.saver[2,:,0]
-    x0.shape = tracer.N[0], tracer.N[1]
-    y0.shape = tracer.N[0], tracer.N[1]
-    Z = tracer.Dx
-    Z.shape = tracer.N[0], tracer.N[1]
-    p=ax1.pcolormesh(x0,y0,Z)
-    fig.colorbar(p,ax=ax1)
-    Z = tracer.Dy
-    Z.shape = tracer.N[0], tracer.N[1]
-    p=ax2.pcolormesh(x0,y0,Z)
-    fig.colorbar(p,ax=ax2)
-
-    fig.tight_layout()
-    fig.savefig(fname)
+from dtools.math import brunt_tools as bt
+reload(bt)
 
 
 
@@ -125,16 +27,21 @@ def ddx(array, direction, dx):
 
 
 class tracer():
-    def __init__(self,cube,rays,dim=2,length_units=1):
-        self.cube1=cube
-        self.cube=cube
+    def __init__(self,density,rays,dim=2,length_units=1, density_units=1, gladstone_dale=1, skip_gd=False):
+        self.density=density
+        if not skip_gd:
+            self.cube = self.density*density_units*gladstone_dale + 1
+        else:
+            self.cube=density
         self.rays=rays
         self.dim = dim
         self.length_units=length_units
-        self.N = cube.shape
+        self.N = self.cube.shape
         self.xplane, self.yplane, z = get_rays(self.N[0], 2, length_units)
         self.xplane.shape = self.N[0],self.N[1]
         self.yplane.shape = self.N[0],self.N[1]
+        self.density_units=density_units
+        self.gladstone_dale=gladstone_dale
     def make_constant(self):
         shape = nar(self.cube1.shape)
         shape += 2
@@ -163,8 +70,9 @@ class tracer():
         #z = (np.arange(N[2])+0.5)/N[2]
         z = (np.arange(N[2]))/N[2]
         z.shape = 1,1,z.size
-        self.zproj = ((1-z)*np.log(self.cube)).sum(axis=2)
-        dx=4*np.pi/N[0] #domain is 2pi, Npixels, centered stencil
+        dz = 1/N[2]
+        self.zproj = ((1-z)*np.log(self.cube)*dz).sum(axis=2)
+        dx=4*np.pi/N[0] #domain is 2pi, Npixels, centered stencil.  What's the N for?
         self.dpdx = ddx(self.zproj,0,dx)
         self.dpdy = ddx(self.zproj,1,dx)
 
@@ -183,12 +91,89 @@ class tracer():
         xf,yf,zf=self.saver[0,:,-1], self.saver[1,:,-1], self.saver[2,:,-1]
         x0,y0,z0=self.saver[0,:,0], self.saver[1,:,0], self.saver[2,:,0]
         #xx,yy,zz=self.saver[0,:,:], self.saver[1,:,:],self.saver[2,:,:]
-        #This 4pi/N is necessary, but not in the right place.
-        self.Dx = (xf-x0)/(4*np.pi/self.N[0])
-        self.Dy = (yf-y0)/(4*np.pi/self.N[0])
+        #This 4pi is necessary, but not in the right place.
+        self.Dx = (xf-x0)/(4*np.pi)
+        self.Dy = (yf-y0)/(4*np.pi)
         shape = self.N[0:2]
         self.Dx.shape=shape
         self.Dy.shape=shape
+
+    def image2(self, ftool,fname):
+        fig,axes=plt.subplots(2,2, figsize=(8,8))
+        ax0=axes[0][0];ax1=axes[0][1]
+        ax2=axes[1][0];ax3=axes[1][1]
+
+        f1 = self.density.mean(axis=2)
+        f2 = self.recovered
+
+        pl=ax0.imshow( f1.transpose())
+        fig.colorbar(pl,ax=ax0)
+        pl=ax1.imshow(f2.transpose())
+        ax0.set_title('Original')
+        fig.colorbar(pl,ax=ax1)
+        ax1.set_title('Reconstructed')
+
+        pch.simple_phase(f1.flatten(),f2.flatten(),ax=ax2,bins=[16,16])
+        ax2.set_title('orig vs recons')
+
+        bt.plot_brunt(ftool,method='full',ax=ax3)
+        fig.tight_layout()
+        fig.savefig(fname)
+
+
+
+
+
+    def image(self, fname):
+        fig,axes=plt.subplots(3,2, figsize=(8,12))
+        ax0=axes[0][0];ax1=axes[0][1]
+        ax2=axes[1][0];ax3=axes[1][1]
+        ax4=axes[2][0];ax5=axes[2][1]
+
+        f1 = self.density.mean(axis=2)
+        f2 = self.recovered
+
+        pl=ax0.imshow( f1.transpose())
+        fig.colorbar(pl,ax=ax0)
+        pl=ax1.imshow(f2.transpose())
+        ax0.set_title('Original')
+        fig.colorbar(pl,ax=ax1)
+        ax1.set_title('Reconstructed')
+
+        pch.simple_phase(f1.flatten(),f2.flatten(),ax=ax2,bins=[16,16])
+        ax2.set_title('orig vs recons')
+
+        pch.simple_phase( self.Dx.flatten(), self.Dy.flatten(), ax=ax3, bins=[self.N[0],self.N[1]])
+        #ax3.pcolormesh(self.xplane, self.yplane, 
+        xf,yf,zf=self.saver[0,:,-1], self.saver[1,:,-1], self.saver[2,:,-1]
+        x0,y0,z0=self.saver[0,:,0], self.saver[1,:,0], self.saver[2,:,0]
+        #pch.simple_phase( xf.flatten(), yf.flatten(), bins=[64,64],ax=ax3)
+
+        x0.shape=self.N[0],self.N[1]
+        y0.shape=self.N[0],self.N[1]
+        ax4.pcolormesh(x0,y0,self.Dx, shading='nearest')
+
+
+
+
+
+
+
+
+
+
+        fig.tight_layout()
+        fig.savefig(fname)
+
+
+    def invert(self):
+        self.get_dx()
+        self.get_dx_proj()
+        total=self.zproj.sum()
+        rho2 = invert( self.Dx, self.Dy, mean=total).real
+        rho2 /= self.density_units*self.gladstone_dale
+        rho2 *= 2
+        self.recovered = rho2
 
     def march(self):
 
